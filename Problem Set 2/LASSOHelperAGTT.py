@@ -13,7 +13,6 @@ from scipy import sparse, stats
 import itertools as it
 from sklearn.preprocessing import StandardScaler as scaler
 from sklearn.linear_model import Lasso
-import copy
 
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['text.latex.preamble'] = [
@@ -161,10 +160,18 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-6, max_iter=1000, standardized=False,
 
     # Implementing SAFE Strategy
     if safe:
+
+        # Find lambda_max: minimum value of lambda such that LASSO estimate is zero
         lmbda_max = lambda_zero(y=y, X=X, standardized=True)
 
-        safe_range = np.where((X.T @ y).squeeze() >= lmbda_max - norm(X, axis=1) * norm(y) *
-                              (lmbda_max - lmbda)/lmbda)
+        # Assign Boolean condition for covariates that can be discarded using the SAFE condition
+        safe_condition = (X.T @ y).squeeze() < lmbda_max - norm(X, axis=0) * norm(y) * (lmbda_max - lmbda)/lmbda
+
+        # Find indices corresponding to "relevant" covariates
+        safe_range = np.where(~safe_condition)[0]
+
+        # Set discarded covariates to have zero estimate under LASSO
+        b_guess[safe_condition] = 0
 
     keyDict = {"estimate", "objectives", "steps", "status"}
     output = dict([(key, []) for key in keyDict])
@@ -206,6 +213,7 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-6, max_iter=1000, standardized=False,
         if dist <= eps:
             output["status"] = "convergence"
 
-    output["status"] = "max_iter exceed"
+    if niter >= max_iter:
+        output["status"] = "max_iter exceed"
 
     return output

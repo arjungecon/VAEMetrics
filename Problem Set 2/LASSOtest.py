@@ -49,7 +49,7 @@ b[randint(1, N_param, n_0), :] = 0
 # Set outcome variable
 Y = X @ b + u
 
-lasso_est = lasso_cdg(b_start=0*b, y=Y, X=X, lmbda=0.1, active_set=True, safe=False)
+lasso_est = lasso_cdg(b_start=0*b, y=Y, X=X, lmbda=0.1, active_set=True, safe=True)
 print(lasso_est['status'])
 
 # cProfile.run('lasso_cdg(bstart=0*b, y=Y, X=X, lmbda=0.1)')
