@@ -96,9 +96,9 @@ def lambda_zero(y, X, standardized=False):
         X = X[:, 1:]
 
     if standardized is False:
-        X, y = zscore(X, axis=0), zscore(y)
+        X, y = zscore(X, axis=0), y - y.mean()
 
-    lmbda_max = np.max(np.abs(y.T @ X))
+    lmbda_max = np.max(np.abs(y.T @ X) / y.size)
 
     return lmbda_max
 
@@ -156,7 +156,7 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-7, max_iter=5000, standardized=False,
 
     # Standardize data if not done so
     if standardized is False:
-        X, y = zscore(X, axis=0), zscore(y)
+        X, y = zscore(X, axis=0), y - y_mean
 
     # LASSO objective
     lasso_obj = lambda b: lasso_objective(b, y, X, lmbda)
@@ -216,7 +216,7 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-7, max_iter=5000, standardized=False,
             # Update guess for j^{th} coordinate using LASSO closed form solution under CDG.
             b_update[j] = dual_sol(bj, lmbda)
 
-        # Compute b0 and the distance between the successive LASSO estimates.
+        # Compute the distance between the successive LASSO estimates.
         b0 = y_mean - np.dot(X_mean, b_update)
         dist = norm(b_update - b_guess, ord=np.inf)
 
@@ -301,8 +301,38 @@ def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, 
     return output
 
 
-def lasso_K_fold(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.005, warm_start=False):
+def lasso_K_fold(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.005, num_k=3):
 
     # Question 1 Part G
 
+    kf = KFold(n_splits=num_k)
+    split_num = 0
+    iota = (X[:, 0] == X[:, 0].mean()).all()
 
+    lmbda_k, cv_error = np.zeros(num_k), np.zeros(num_k)
+
+    for train_index, test_index in kf.split(X):
+
+        X_train, y_train = X[train_index, :], y[train_index]
+
+        lasso_res_k = lasso_wrapper_sequential(b_start=b_start, y=y_train, X=X_train,
+                                               standardized=standardized,
+                                               num_lambda=num_lambda, min_factor=min_factor,
+                                               warm_start=False)
+
+        index_k = int(np.argmin(lasso_res_k['objective']))
+        lmbda_k[split_num], b_lasso_k = lasso_res_k['lambda'][index_k], lasso_res_k['estimate'][index_k]
+
+        X_test, y_test = X[test_index, :], y[test_index]
+
+        if iota:
+
+            cv_error[split_num] = np.sum(np.square(y_test - X_test @ b_lasso_k))
+
+        else:
+
+            cv_error[split_num] = np.sum(np.square(y_test - X_test @ b_lasso_k[1:]))
+
+        split_num = split_num + 1
+
+    return lmbda_k, cv_error
