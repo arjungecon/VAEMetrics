@@ -13,6 +13,8 @@ from scipy import sparse, stats
 import itertools as it
 from sklearn.preprocessing import StandardScaler as scaler
 from sklearn.linear_model import Lasso
+from sklearn.model_selection import KFold
+
 
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['text.latex.preamble'] = [
@@ -96,7 +98,7 @@ def lambda_zero(y, X, standardized=False):
     if standardized is False:
         X, y = zscore(X, axis=0), zscore(y)
 
-    lmbda_max = np.max(np.abs(y.T @ X)/y.size)
+    lmbda_max = np.max(np.abs(y.T @ X))
 
     return lmbda_max
 
@@ -297,3 +299,10 @@ def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, 
         print('lambda = {}, objective = {}'.format(lmbda, output["objective"][-1]))
 
     return output
+
+
+def lasso_K_fold(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.005, warm_start=False):
+
+    # Question 1 Part G
+
+

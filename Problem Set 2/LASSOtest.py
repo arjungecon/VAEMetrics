@@ -53,3 +53,8 @@ Y = X @ b + u
 # print(lasso_est['status'])
 
 lasso_res = lasso_wrapper_sequential(b_start=0*b, y=Y, X=X)
+
+# @njit(parallel=True)
+# Def fun(x,c):
+# for k in prange(k)
+
