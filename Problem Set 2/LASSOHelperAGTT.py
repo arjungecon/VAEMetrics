@@ -449,12 +449,18 @@ def lasso_wrapper_parallel(b_start, y, X, standardized=False, num_lambda=100, mi
 
         output = Parallel(n_jobs=num_cores)(delayed(parallel_cdg)(i) for i in range(num_lambda))
 
+        return output
+
     else:
 
-        output = Parallel(n_jobs=num_cores)(delayed(parallel_k_fold)(i) for i in range(num_lambda))
+        output_CV = Parallel(n_jobs=num_cores)(delayed(parallel_k_fold)(i) for i in range(num_lambda))
+        lmbda_CV = np.array(output_CV)[np.argmin(np.array(output_CV)[:, 1]), 0]
 
-    return output
+        lasso_CV = lasso_cdg(b_start=b_start, y=y, X=X, lmbda=lmbda_CV,
+                                    standardized=standardized,
+                                    active_set=True, active_set_cycle=10, safe=True)
 
+        return output_CV, lmbda_CV, lasso_CV
 
 #
 # # what are your inputs, and what operation do you want to
