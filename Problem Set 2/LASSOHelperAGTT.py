@@ -97,8 +97,7 @@ def lambda_zero(y, X, standardized=False):
         X = X[:, 1:]
 
     if standardized is False:
-        # X, y = zscore(X, axis=0), y - y.mean()
-        X, y = (X - X.mean(axis=0)[ax, :])/X.std(axis=0)[ax, :], y - y.mean()
+        X, y = zscore(X, axis=0), y - y.mean()
     lmbda_max = np.max(np.abs(y.T @ X) / y.size)
 
     return lmbda_max
@@ -157,8 +156,8 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-7, max_iter=5000, standardized=False,
 
     # Standardize data if not done so
     if standardized is False:
-        # X, y = zscore(X, axis=0), y - y_mean
-        X, y = (X - X.mean(axis=0)[ax, :])/X.std(axis=0)[ax, :], y - y.mean()
+        X, y = zscore(X, axis=0), y - y_mean
+        # X, y = (X - X.mean(axis=0)[ax, :])/X.std(axis=0)[ax, :], y - y.mean()
 
     # LASSO objective
     lasso_obj = lambda b: lasso_objective(b, y, X, lmbda)
@@ -244,12 +243,12 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-7, max_iter=5000, standardized=False,
 def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.001,
                              warm_start=False, k_fold=False, num_k=5):
 
-    # Question 1 Part F (a) + (b)
+    # Question 1 Part F (a) + (b) + G
 
     """
         Function that performs the LASSO estimation through CDG + Active Set + SAFE for a pre-determined
          sequence of λ. Includes option to use the warm start feature for the initial guess of the LASSO
-         estimate in successive iterations over λ values.
+         estimate in successive iterations over λ values, and for K-fold cross-validation.
 
         :param b_start: Initial guess for the parameter vector (may or may not include b0, which will be
          trimmed out if so)
@@ -354,14 +353,14 @@ def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, 
     return output
 
 
-def lasso_wrapper_parallel(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.001):
+def lasso_wrapper_parallel(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.001,
+                           k_fold=False, num_k=5):
 
-    # Question 1 Part F (a) + (b)
+    # Question 1 Part F (a) + (b) + G
 
     """
         Function that performs the LASSO estimation through CDG + Active Set + SAFE for a pre-determined
-         sequence of λ. Includes option to use the warm start feature for the initial guess of the LASSO
-         estimate in successive iterations over λ values.
+         sequence of λ. Includes option for K-fold cross-validation.
 
         :param b_start: Initial guess for the parameter vector (may or may not include b0, which will be
          trimmed out if so)
@@ -372,8 +371,13 @@ def lasso_wrapper_parallel(b_start, y, X, standardized=False, num_lambda=100, mi
         :param num_lambda: Number of λ values to include in the sequence.
         :param min_factor: The minimum value of λ as a fraction of λ_max
 
+        :param warm_start: Option for using warm start initial conditions.
+
         As such the lambda sequence is given by:
         Sequence(λ) = log([λ_max * min_factor : num_lambda : λ_max])
+
+        :param k_fold: Option to compute cross-validation results of lambda in a K-fold CV algorithm.
+        :param num_k: The number of K-folds to use. Used only when k_fold is True.
 
         :return: List containing:
             - :estimate: Final coefficient vector estimates across different λ values,
@@ -396,6 +400,40 @@ def lasso_wrapper_parallel(b_start, y, X, standardized=False, num_lambda=100, mi
 
         return [lasso_est['estimate'][-1], lasso_est['objectives'][-1], lasso_est['status']]
 
+    def parallel_k_fold(lmbda_index):
+        """
+            :param lmbda_index: Index of the lambda vector corresponding to the lambda value
+             used in parallelization of the LASSO cross-validation algorithm.
+        """
+
+        lmbda, split_num, cv_error_k = lmbda_vec[lmbda_index], 0, np.zeros(num_k)
+        kf = KFold(n_splits=num_k)
+        iota = (X[:, 0] == X[:, 0].mean()).all()
+
+        # Looping over each K-fold
+
+        for train_index, test_index in kf.split(X):
+
+            # Training to obtain LASSO estimate for the given lambda
+
+            X_train, y_train = X[train_index, :], y[train_index]
+
+            lasso_res_k = lasso_cdg(b_start=b_start, y=y_train, X=X_train, lmbda=lmbda,
+                                    standardized=standardized,
+                                    active_set=True, active_set_cycle=10, safe=True)
+
+            lasso_est_k = lasso_res_k['estimate'][-1]
+
+            # Using the test data to construct the prediction error
+
+            X_test, y_test = X[test_index, :], y[test_index]
+
+            cv_error_k[split_num] = np.mean(np.square(y_test - X_test @ lasso_est_k[~iota * 1:]))
+
+            split_num = split_num + 1
+
+        return [lmbda, cv_error_k.sum()]
+
     # Computing maximum lambda before LASSO estimate is exactly zero.
     lmbda_max = lambda_zero(y, X, standardized=standardized)
 
@@ -404,13 +442,16 @@ def lasso_wrapper_parallel(b_start, y, X, standardized=False, num_lambda=100, mi
     # Computing sequence of lambdas over which LASSO is run based on the specification.
     lmbda_vec = np.flipud(np.linspace(start=min_factor, stop=1, num=num_lambda) * lmbda_max)
 
-    # Empty dictionary to store results for each value of lambda.
-    key_dict = {"lambda", "estimate", "objective", "status"}
-    output = dict([(key, []) for key in key_dict])
-
+    # Number of cores used in parallelization.
     num_cores = multiprocessing.cpu_count()
 
-    output = Parallel(n_jobs=num_cores)(delayed(parallel_cdg)(i) for i in range(num_lambda))
+    if k_fold is False:
+
+        output = Parallel(n_jobs=num_cores)(delayed(parallel_cdg)(i) for i in range(num_lambda))
+
+    else:
+
+        output = Parallel(n_jobs=num_cores)(delayed(parallel_k_fold)(i) for i in range(num_lambda))
 
     return output
 
