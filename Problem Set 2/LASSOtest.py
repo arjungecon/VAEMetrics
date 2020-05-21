@@ -13,7 +13,7 @@ from scipy import sparse, stats
 import itertools as it
 from sklearn.preprocessing import StandardScaler as scaler
 from sklearn.linear_model import Lasso
-from LASSOHelperAGTT import lasso_wrapper_sequential, lambda_zero, lasso_cdg ,lasso_K_fold
+from LASSOHelperAGTT import lasso_wrapper_sequential, lambda_zero, lasso_cdg
 import cProfile
 
 matplotlib.rcParams['text.usetex'] = True
@@ -49,10 +49,12 @@ b[randint(1, N_param, n_0), :] = 0
 # Set outcome variable
 Y = X @ b + u
 
-# lasso_est = lasso_cdg(b_start=0*b, y=Y, X=X, lmbda=0.1, active_set=True, safe=True)
+lasso_est =lasso_wrapper_sequential(b*0, y=Y, X=X, standardized=False, num_lambda=100, min_factor=0.001,
+                                    warm_start=True, k_fold=True, num_k=5)
+
 # print(lasso_est['status'])
 
-lmbda, cv = lasso_K_fold(b_start=0*b, y=Y, X=X)
+# lmbda, cv = lasso_K_fold(b_start=0*b, y=Y, X=X)
 
 # @njit(parallel=True)
 # Def fun(x,c):

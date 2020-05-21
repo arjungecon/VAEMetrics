@@ -185,8 +185,8 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-7, max_iter=5000, standardized=False,
         b_guess[safe_condition] = 0
 
     # Empty dictionary to store results of LASSO estimation for a given value of lambda.
-    keyDict = {"estimate", "objectives", "steps", "status"}
-    output = dict([(key, []) for key in keyDict])
+    key_dict = {"estimate", "objectives", "steps", "status"}
+    output = dict([(key, []) for key in key_dict])
 
     niter, dist = 0, 1000
 
@@ -238,8 +238,8 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-7, max_iter=5000, standardized=False,
     return output
 
 
-def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.005,
-                             warm_start=False):
+def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.001,
+                             warm_start=False, k_fold=False, num_k=5):
 
     # Question 1 Part F (a) + (b)
 
@@ -262,6 +262,9 @@ def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, 
         As such the lambda sequence is given by:
         Sequence(λ) = log([λ_max * min_factor : num_lambda : λ_max])
 
+        :param k_fold: Option to compute cross-validation results of lambda in a K-fold CV algorithm.
+        :param num_k: The number of K-folds to use. Used only when k_fold is True.
+
         :return: List containing:
             - :estimate: Final coefficient vector estimates across different λ values,
             - :objectives: Vector containing LASSO objective across different λ values,
@@ -276,63 +279,109 @@ def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, 
     # Computing sequence of lambdas over which LASSO is run based on the specification.
     lmbda_vec = np.linspace(start=min_factor, stop=1, num=num_lambda) * lmbda_max
 
-    # Empty dictionary to store results for each value of lambda.
-    keyDict = {"lambda", "estimate", "objective", "status"}
-    output = dict([(key, []) for key in keyDict])
+    if k_fold is False:  # Running procedure with no K-fold cross-validation.
 
-    # Looping over the lambda vector.
-    for il, lmbda in enumerate(np.flipud(lmbda_vec)):
+        # Empty dictionary to store results for each value of lambda.
+        key_dict = {"lambda", "estimate", "objective", "status"}
+        output = dict([(key, []) for key in key_dict])
 
-        # Running lasso_cdg for the given value of lambda. We use both the active_set and SAFE strategies.
-        lasso_est = lasso_cdg(b_start, y, X, lmbda, eps=1e-6, max_iter=1000, standardized=standardized,
-                              active_set=True, active_set_cycle=10, safe=True)
+        # Looping over the lambda vector.
+        for il, lmbda in enumerate(np.flipud(lmbda_vec)):
 
-        output["lambda"].append(lmbda)
-        output["estimate"].append(lasso_est['estimate'][-1])
-        output["objective"].append(lasso_est['objectives'][-1])
-        output["status"].append(lasso_est['status'])
+            # Running lasso_cdg for the given value of lambda. We use both the active_set and SAFE strategies.
+            lasso_est = lasso_cdg(b_start, y, X, lmbda, eps=1e-6, max_iter=1000, standardized=standardized,
+                                  active_set=True, active_set_cycle=10, safe=True)
 
-        if warm_start:
+            output["lambda"].append(lmbda)
+            output["estimate"].append(lasso_est['estimate'][-1])
+            output["objective"].append(lasso_est['objectives'][-1])
+            output["status"].append(lasso_est['status'])
 
-            b_start = lasso_est['estimate'][-1][:, ax]
+            if warm_start:
 
-        print('lambda = {}, objective = {}'.format(lmbda, output["objective"][-1]))
+                b_start = lasso_est['estimate'][-1][:, ax]
+
+    else:  # Running procedure with K-fold cross-validation of lambda.
+
+        # Empty dictionary to store CV error for each value of lambda.
+        key_dict = {"lambda", "CVError"}
+        output = dict([(key, []) for key in key_dict])
+
+        kf = KFold(n_splits=num_k)
+        iota = (X[:, 0] == X[:, 0].mean()).all()
+        b_start_k = [b_start] * num_k
+
+        # Looping over the lambda vector.
+
+        for il, lmbda in enumerate(np.flipud(lmbda_vec)):
+
+            split_num, cv_error_k = 0, np.zeros(num_k)
+
+            # Looping over each K-fold
+
+            for train_index, test_index in kf.split(X):
+
+                # Training to obtain LASSO estimate for the given lambda
+
+                X_train, y_train = X[train_index, :], y[train_index]
+
+                lasso_res_k = lasso_cdg(b_start=b_start_k[split_num], y=y_train, X=X_train, lmbda=lmbda,
+                                        standardized=standardized,
+                                        active_set=True, active_set_cycle=10, safe=True)
+
+                lasso_est_k = lasso_res_k['estimate'][-1]
+
+                if warm_start:
+
+                    b_start_k[split_num] = lasso_est_k[:, ax]
+
+                # Using the test data to construct the prediction error
+
+                X_test, y_test = X[test_index, :], y[test_index]
+
+                cv_error_k[split_num] = np.mean(np.square(y_test - X_test @ lasso_est_k[~iota * 1:]))
+
+                split_num = split_num + 1
+
+            # Storing the lambda value and the CV error
+
+            output["lambda"].append(lmbda)
+            output["CVError"].append(cv_error_k.sum())
 
     return output
 
-
-def lasso_K_fold(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.005, num_k=3):
-
-    # Question 1 Part G
-
-    kf = KFold(n_splits=num_k)
-    split_num = 0
-    iota = (X[:, 0] == X[:, 0].mean()).all()
-
-    lmbda_k, cv_error = np.zeros(num_k), np.zeros(num_k)
-
-    for train_index, test_index in kf.split(X):
-
-        X_train, y_train = X[train_index, :], y[train_index]
-
-        lasso_res_k = lasso_wrapper_sequential(b_start=b_start, y=y_train, X=X_train,
-                                               standardized=standardized,
-                                               num_lambda=num_lambda, min_factor=min_factor,
-                                               warm_start=False)
-
-        index_k = int(np.argmin(lasso_res_k['objective']))
-        lmbda_k[split_num], b_lasso_k = lasso_res_k['lambda'][index_k], lasso_res_k['estimate'][index_k]
-
-        X_test, y_test = X[test_index, :], y[test_index]
-
-        if iota:
-
-            cv_error[split_num] = np.sum(np.square(y_test - X_test @ b_lasso_k))
-
-        else:
-
-            cv_error[split_num] = np.sum(np.square(y_test - X_test @ b_lasso_k[1:]))
-
-        split_num = split_num + 1
-
-    return lmbda_k, cv_error
+# def lasso_K_fold(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.005, num_k=3):
+#
+#     # Question 1 Part G
+#
+#     kf = KFold(n_splits=num_k)
+#     split_num = 0
+#     iota = (X[:, 0] == X[:, 0].mean()).all()
+#
+#     lmbda_k, cv_error = np.zeros(num_k), np.zeros(num_k)
+#
+#     for train_index, test_index in kf.split(X):
+#
+#         X_train, y_train = X[train_index, :], y[train_index]
+#
+#         lasso_res_k = lasso_wrapper_sequential(b_start=b_start, y=y_train, X=X_train,
+#                                                standardized=standardized,
+#                                                num_lambda=num_lambda, min_factor=min_factor,
+#                                                warm_start=False)
+#
+#         index_k = int(np.argmin(lasso_res_k['objective']))
+#         lmbda_k[split_num], b_lasso_k = lasso_res_k['lambda'][index_k], lasso_res_k['estimate'][index_k]
+#
+#         X_test, y_test = X[test_index, :], y[test_index]
+#
+#         if iota:
+#
+#             cv_error[split_num] = np.sum(np.square(y_test - X_test @ b_lasso_k))
+#
+#         else:
+#
+#             cv_error[split_num] = np.sum(np.square(y_test - X_test @ b_lasso_k[1:]))
+#
+#         split_num = split_num + 1
+#
+#     return lmbda_k, cv_error
