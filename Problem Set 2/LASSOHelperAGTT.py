@@ -97,7 +97,7 @@ def lambda_zero(y, X, standardized=False):
         X = X[:, 1:]
 
     if standardized is False:
-        X, y = zscore(X, axis=0), y - y.mean()
+        X, y = zscore(X, axis=0), zscore(y)
     lmbda_max = np.max(np.abs(y.T @ X) / y.size)
 
     return lmbda_max
@@ -156,7 +156,7 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-7, max_iter=5000, standardized=False,
 
     # Standardize data if not done so
     if standardized is False:
-        X, y = zscore(X, axis=0), y - y_mean
+        X, y = zscore(X, axis=0), zscore(y)
         # X, y = (X - X.mean(axis=0)[ax, :])/X.std(axis=0)[ax, :], y - y.mean()
 
     # LASSO objective

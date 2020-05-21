@@ -49,7 +49,7 @@ b[randint(1, N_param, n_0), :] = 0
 # Set outcome variable
 Y = X @ b + u
 
-lasso_est = lasso_wrapper_parallel(b*0, y=Y, X=X, standardized=False, num_lambda=100, min_factor=0.001, k_fold=True)
+lasso_est = lasso_wrapper_parallel(b*0, y=Y, X=X, standardized=False, num_lambda=100, min_factor=0.0001, k_fold=True)
 
 # print(lasso_est['status'])
 
