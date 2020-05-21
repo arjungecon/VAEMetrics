@@ -1,12 +1,11 @@
 import numpy as np
 import pandas as pd
-from numba import njit, jit
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib import rc
 import statsmodels.api as sm
-from scipy.stats import norm, zscore
+from scipy.stats import zscore
 import scipy as sp
 from numpy import random, linalg
 from scipy import sparse, stats
@@ -14,6 +13,8 @@ import itertools as it
 from sklearn.preprocessing import StandardScaler as scaler
 from sklearn.linear_model import Lasso
 from sklearn.model_selection import KFold
+from joblib import Parallel, delayed
+import multiprocessing
 
 
 matplotlib.rcParams['text.usetex'] = True
@@ -96,8 +97,8 @@ def lambda_zero(y, X, standardized=False):
         X = X[:, 1:]
 
     if standardized is False:
-        X, y = zscore(X, axis=0), y - y.mean()
-
+        # X, y = zscore(X, axis=0), y - y.mean()
+        X, y = (X - X.mean(axis=0)[ax, :])/X.std(axis=0)[ax, :], y - y.mean()
     lmbda_max = np.max(np.abs(y.T @ X) / y.size)
 
     return lmbda_max
@@ -156,7 +157,8 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-7, max_iter=5000, standardized=False,
 
     # Standardize data if not done so
     if standardized is False:
-        X, y = zscore(X, axis=0), y - y_mean
+        # X, y = zscore(X, axis=0), y - y_mean
+        X, y = (X - X.mean(axis=0)[ax, :])/X.std(axis=0)[ax, :], y - y.mean()
 
     # LASSO objective
     lasso_obj = lambda b: lasso_objective(b, y, X, lmbda)
@@ -203,6 +205,7 @@ def lasso_cdg(b_start, y, X, lmbda, eps=1e-7, max_iter=5000, standardized=False,
 
         else:
 
+            # Apply active-set range.
             range_j = active_range(b_guess)
 
         for j in range_j:
@@ -350,6 +353,79 @@ def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, 
 
     return output
 
+
+def lasso_wrapper_parallel(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.001):
+
+    # Question 1 Part F (a) + (b)
+
+    """
+        Function that performs the LASSO estimation through CDG + Active Set + SAFE for a pre-determined
+         sequence of λ. Includes option to use the warm start feature for the initial guess of the LASSO
+         estimate in successive iterations over λ values.
+
+        :param b_start: Initial guess for the parameter vector (may or may not include b0, which will be
+         trimmed out if so)
+        :param y: Outcome variable, vector of size N.
+        :param X: Covariate variables (may or may not include ι), matrix of size N x P.
+        :param standardized: Indicator for whether the data has been standardized.
+
+        :param num_lambda: Number of λ values to include in the sequence.
+        :param min_factor: The minimum value of λ as a fraction of λ_max
+
+        As such the lambda sequence is given by:
+        Sequence(λ) = log([λ_max * min_factor : num_lambda : λ_max])
+
+        :return: List containing:
+            - :estimate: Final coefficient vector estimates across different λ values,
+            - :objectives: Vector containing LASSO objective across different λ values,
+            - :lambda: string regarding which stopping criterion was used.
+    """
+
+    def parallel_cdg(lmbda_index):
+
+        """
+            :param lmbda_index: Index of the lambda vector corresponding to the lambda value
+             used in parallelization of the LASSO algorithm.
+        """
+
+        lmbda = lmbda_vec[lmbda_index]
+
+        # Running lasso_cdg for the given value of lambda. We use both the active_set and SAFE strategies.
+        lasso_est = lasso_cdg(b_start, y, X, lmbda, eps=1e-6, max_iter=1000, standardized=standardized,
+                              active_set=True, active_set_cycle=10, safe=True)
+
+        return [lasso_est['estimate'][-1], lasso_est['objectives'][-1], lasso_est['status']]
+
+    # Computing maximum lambda before LASSO estimate is exactly zero.
+    lmbda_max = lambda_zero(y, X, standardized=standardized)
+
+    print('max = {}'.format(lmbda_max))
+
+    # Computing sequence of lambdas over which LASSO is run based on the specification.
+    lmbda_vec = np.flipud(np.linspace(start=min_factor, stop=1, num=num_lambda) * lmbda_max)
+
+    # Empty dictionary to store results for each value of lambda.
+    key_dict = {"lambda", "estimate", "objective", "status"}
+    output = dict([(key, []) for key in key_dict])
+
+    num_cores = multiprocessing.cpu_count()
+
+    output = Parallel(n_jobs=num_cores)(delayed(parallel_cdg)(i) for i in range(num_lambda))
+
+    return output
+
+
+#
+# # what are your inputs, and what operation do you want to
+# # perform on each input. For example...
+# inputs = range(10)
+# def processInput(i):
+#     return i * i
+#
+# num_cores = multiprocessing.cpu_count()
+#
+# results = Parallel(n_jobs=num_cores)(delayed(processInput)(i) for i in inputs)
+#
 # def lasso_K_fold(b_start, y, X, standardized=False, num_lambda=100, min_factor=0.005, num_k=3):
 #
 #     # Question 1 Part G
@@ -385,3 +461,5 @@ def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, 
 #         split_num = split_num + 1
 #
 #     return lmbda_k, cv_error
+
+
