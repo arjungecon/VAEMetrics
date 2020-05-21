@@ -35,6 +35,32 @@ inv, ax, norm = np.linalg.inv, np.newaxis, np.linalg.norm
 randint = np.random.randint
 
 
+def simulate_data(N_obs=200, N_param=120, n_0=70):
+
+    """
+        Function that simulates data to be used in the LASSO.
+        :param N_obs: Number of observations.
+        :param N_param: Number of parameters, not including intercept.
+        :param n_0: Number of parameters set to 0.
+        :return Y, X: Dataset with outcome and covariates.
+
+    """
+
+    # Simulate data used in exercise
+    X, u, b = np.random.randn(N_obs, N_param), np.random.randn(N_obs, 1), np.random.randn(N_param, 1)
+
+    # Set intercept
+    X[:, 0] = 1.
+
+    # Random number of coefficients set to zero
+    b[randint(1, N_param, n_0), :] = 0
+
+    # Set outcome variable
+    Y = X @ b + u
+
+    return Y, X
+
+
 def lasso_objective(b, y, X, lmbda):
 
     # Question 1 Part A
