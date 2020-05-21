@@ -302,8 +302,6 @@ def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, 
     # Computing maximum lambda before LASSO estimate is exactly zero.
     lmbda_max = lambda_zero(y, X, standardized=standardized)
 
-    print('max = {}'.format(lmbda_max))
-
     # Computing sequence of lambdas over which LASSO is run based on the specification.
     lmbda_vec = np.linspace(start=min_factor, stop=1, num=num_lambda) * lmbda_max
 
@@ -462,8 +460,6 @@ def lasso_wrapper_parallel(b_start, y, X, standardized=False, num_lambda=100, mi
 
     # Computing maximum lambda before LASSO estimate is exactly zero.
     lmbda_max = lambda_zero(y, X, standardized=standardized)
-
-    print('max = {}'.format(lmbda_max))
 
     # Computing sequence of lambdas over which LASSO is run based on the specification.
     lmbda_vec = np.flipud(np.linspace(start=min_factor, stop=1, num=num_lambda) * lmbda_max)
