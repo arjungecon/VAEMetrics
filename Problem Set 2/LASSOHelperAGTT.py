@@ -35,6 +35,32 @@ inv, ax, norm = np.linalg.inv, np.newaxis, np.linalg.norm
 randint = np.random.randint
 
 
+def simulate_data(N_obs=200, N_param=120, n_0=70):
+
+    """
+        Function that simulates data to be used in the LASSO.
+        :param N_obs: Number of observations.
+        :param N_param: Number of parameters, not including intercept.
+        :param n_0: Number of parameters set to 0.
+        :return Y, X: Dataset with outcome and covariates.
+
+    """
+
+    # Simulate data used in exercise
+    X, u, b = np.random.randn(N_obs, N_param), np.random.randn(N_obs, 1), np.random.randn(N_param, 1)
+
+    # Set intercept
+    X[:, 0] = 1.
+
+    # Random number of coefficients set to zero
+    b[randint(1, N_param, n_0), :] = 0
+
+    # Set outcome variable
+    Y = X @ b + u
+
+    return Y, X
+
+
 def lasso_objective(b, y, X, lmbda):
 
     # Question 1 Part A
@@ -276,8 +302,6 @@ def lasso_wrapper_sequential(b_start, y, X, standardized=False, num_lambda=100, 
     # Computing maximum lambda before LASSO estimate is exactly zero.
     lmbda_max = lambda_zero(y, X, standardized=standardized)
 
-    print('max = {}'.format(lmbda_max))
-
     # Computing sequence of lambdas over which LASSO is run based on the specification.
     lmbda_vec = np.linspace(start=min_factor, stop=1, num=num_lambda) * lmbda_max
 
@@ -436,8 +460,6 @@ def lasso_wrapper_parallel(b_start, y, X, standardized=False, num_lambda=100, mi
 
     # Computing maximum lambda before LASSO estimate is exactly zero.
     lmbda_max = lambda_zero(y, X, standardized=standardized)
-
-    print('max = {}'.format(lmbda_max))
 
     # Computing sequence of lambdas over which LASSO is run based on the specification.
     lmbda_vec = np.flipud(np.linspace(start=min_factor, stop=1, num=num_lambda) * lmbda_max)
