@@ -59,3 +59,12 @@ lasso_est = lasso_wrapper_parallel(b*0, y=Y, X=X, standardized=False, num_lambda
 # Def fun(x,c):
 # for k in prange(k)
 
+lasso_res = np.array(lasso_est[0])
+lasso_res = lasso_res[lasso_res[:, 1] < 1e10, :]
+lasso_res[:, 1] = lasso_res[:, 1]/lasso_res[:, 1].max()
+
+fig1, ax1 = plt.subplots(figsize=(6, 6), constrained_layout=True, dpi=400)
+
+ax1.plot(lasso_res[:, 0], lasso_res[:, 1])
+ax1.set_xlabel(r'$\lambda$', fontsize=13)
+plt.show()
