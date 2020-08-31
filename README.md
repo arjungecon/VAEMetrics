@@ -1,2 +1,2 @@
-# ECON 31703 (Topics in Econometrics)
-## Arjun Gopinath and Tugce Turk
+# Stuff about VAEs
+## Arjun Gopinath, Tugce Turk and Thomas Wiemann
